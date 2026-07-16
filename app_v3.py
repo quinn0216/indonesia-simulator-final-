@@ -11,100 +11,65 @@ st.set_page_config(layout="wide")
 st.title("🇮🇩 인도네시아 주별 환경탄력성 지수 시뮬레이터")
 st.markdown("가중치를 조절하면 우측 지도의 주별 색상과 좌측 랭킹이 실시간으로 시각화됩니다.")
 
-# 🗺️ 엑셀 주 이름 -> GeoJSON 표준 주 이름(NAME_1) 매핑 딕셔너리
-PROVINCE_MAP = {
-    # 자카르타 / 요그야카르타
-    "dki jakarta": "Jakarta Raya",
-    "jakarta": "Jakarta Raya",
-    "jakarta raya": "Jakarta Raya",
-    "di yogyakarta": "Yogyakarta",
-    "yogyakarta": "Yogyakarta",
-    
-    # 아체 / 방카벨리퉁
-    "nanggroe aceh darussalam": "Aceh",
-    "aceh": "Aceh",
-    "bangka belitung": "Kepulauan Bangka Belitung",
-    "kepulauan bangka belitung": "Kepulauan Bangka Belitung",
-    "kep. bangka belitung": "Kepulauan Bangka Belitung",
-    
-    # 수마트라 지역
-    "west sumatera": "Sumatera Barat",
-    "sumatera barat": "Sumatera Barat",
-    "north sumatera": "Sumatera Utara",
-    "sumatera utara": "Sumatera Utara",
-    "south sumatera": "Sumatera Selatan",
-    "sumatera selatan": "Sumatera Selatan",
-    "kepulauan riau": "Kepulauan Riau",
-    "kep. riau": "Kepulauan Riau",
-    
-    # 자와 지역
-    "west java": "Jawa Barat",
-    "jawa barat": "Jawa Barat",
-    "east java": "Jawa Timur",
-    "jawa timur": "Jawa Timur",
-    "central java": "Jawa Tengah",
-    "jawa tengah": "Jawa Tengah",
-    "banten": "Banten",
-    
-    # 칼리만탄 지역
-    "west kalimantan": "Kalimantan Barat",
-    "kalimantan barat": "Kalimantan Barat",
-    "east kalimantan": "Kalimantan Timur",
-    "kalimantan timur": "Kalimantan Timur",
-    "south kalimantan": "Kalimantan Selatan",
-    "kalimantan selatan": "Kalimantan Selatan",
-    "central kalimantan": "Kalimantan Tengah",
-    "kalimantan tengah": "Kalimantan Tengah",
-    "north kalimantan": "Kalimantan Utara",
-    "kalimantan utara": "Kalimantan Utara",
-    
-    # 술라웨시 지역
-    "west sulawesi": "Sulawesi Barat",
-    "sulawesi barat": "Sulawesi Barat",
-    "north sulawesi": "Sulawesi Utara",
-    "sulawesi utara": "Sulawesi Utara",
-    "south sulawesi": "Sulawesi Selatan",
-    "sulawesi selatan": "Sulawesi Selatan",
-    "central sulawesi": "Sulawesi Tengah",
-    "sulawesi tengah": "Sulawesi Tengah",
-    "southeast sulawesi": "Sulawesi Tenggara",
-    "sulawesi tenggara": "Sulawesi Tenggara",
-    "gorontalo": "Gorontalo",
-    
-    # 누사텡가라 및 말루쿠 지역
-    "west nusa tenggara": "Nusa Tenggara Barat",
-    "nusa tenggara barat": "Nusa Tenggara Barat",
-    "east nusa tenggara": "Nusa Tenggara Timur",
-    "nusa tenggara timur": "Nusa Tenggara Timur",
-    "maluku": "Maluku",
-    "north maluku": "Maluku Utara",
-    "maluku utara": "Maluku Utara",
-    
-    # 파푸아 지역
-    "papua": "Papua",
-    "west papua": "Papua Barat",
-    "papua barat": "Papua Barat"
-}
-
-# 주 이름을 깔끔하게 청소하고 지도의 표준 명칭으로 교정하는 함수
-def clean_province_name(name):
+# 대소문자, 공백, 모든 특수문자/줄바꿈을 날리고 오직 영문자만 남기는 슈퍼 매칭 함수
+def make_pure_key(name):
     if pd.isna(name):
         return ""
-    # 줄 바꿈 제거 및 양끝 공백 정리
-    name_str = str(name).replace('\n', ' ').strip()
-    name_str = re.sub(r'\s+', ' ', name_str)
+    # 공백, 줄바꿈, 온갖 노이즈 특수문자 완벽히 제거 후 소문자 통일
+    pure = re.sub(r'[^a-zA-Z]', '', str(name)).lower()
     
-    # 매핑 테이블 매칭 시도 (소문자 기준 검색)
-    lookup_key = name_str.lower()
-    if lookup_key in PROVINCE_MAP:
-        return PROVINCE_MAP[lookup_key]
-    
-    # 예외적인 한글 공백이나 대소문자 예방을 위한 타이틀화
-    return name_str.title()
+    # 대표적인 예외 주 이름 싱크홀 방지 보정
+    if "jakarta" in pure:
+        return "jakartaraya"
+    if "yogyakarta" in pure:
+        return "yogyakarta"
+    if "aceh" in pure:
+        return "aceh"
+    if "bangkabelitung" in pure:
+        return "kepulauanbangkabelitung"
+    return pure
+
+# 화면 표시용으로 이름을 보기 좋게 정제해 주는 맵
+DISPLAY_NAMES = {
+    "jakartaraya": "Jakarta Raya",
+    "yogyakarta": "Yogyakarta",
+    "aceh": "Aceh",
+    "kepulauanbangkabelitung": "Kepulauan Bangka Belitung",
+    "banten": "Banten",
+    "bengkulu": "Bengkulu",
+    "gorontalo": "Gorontalo",
+    "jambi": "Jambi",
+    "jawabarat": "Jawa Barat",
+    "jawatengah": "Jawa Tengah",
+    "jawatimur": "Jawa Timur",
+    "kalimantanbarat": "Kalimantan Barat",
+    "kalimantanselatan": "Kalimantan Selatan",
+    "kalimantantengah": "Kalimantan Tengah",
+    "kalimantantimur": "Kalimantan Timur",
+    "kalimantanutara": "Kalimantan Utara",
+    "kepulauanriau": "Kepulauan Riau",
+    "lampung": "Lampung",
+    "maluku": "Maluku",
+    "malukuutara": "Maluku Utara",
+    "nusatenggarabarat": "Nusa Tenggara Barat",
+    "nusatenggaratimur": "Nusa Tenggara Timur",
+    "papua": "Papua",
+    "papuabarat": "Papua Barat",
+    "riau": "Riau",
+    "sulawesibarat": "Sulawesi Barat",
+    "sulawesiselatan": "Sulawesi Selatan",
+    "sulawesitengah": "Sulawesi Tengah",
+    "sulawesitenggara": "Sulawesi Tenggara",
+    "sulawesiutara": "Sulawesi Utara",
+    "sumaterabarat": "Sumatera Barat",
+    "sumateraselatan": "Sumatera Selatan",
+    "sumaterautara": "Sumatera Utara",
+    "bali": "Bali"
+}
 
 @st.cache_data
 def load_and_match_data():
-    # 1. 기온 데이터 로드 (data(최종).xlsx)
+    # 1. 기온 데이터 로드
     try:
         xls_temp = pd.ExcelFile("data(최종).xlsx")
         df_temp_raw = pd.read_excel(xls_temp, sheet_name="Sheet1")
@@ -113,10 +78,11 @@ def load_and_match_data():
         st.stop()
     
     df_temp = pd.DataFrame()
-    df_temp['Province'] = df_temp_raw.iloc[:, 0].apply(clean_province_name)
+    df_temp['Raw_Province'] = df_temp_raw.iloc[:, 0].astype(str)
     df_temp['Temp_Change'] = pd.to_numeric(df_temp_raw.iloc[:, 1], errors='coerce')
+    df_temp['Join_Key'] = df_temp['Raw_Province'].apply(make_pure_key)
     
-    # 2. 변수 데이터 로드 (variables(최종).xlsx)
+    # 2. 변수 데이터 로드
     try:
         xls_vars = pd.ExcelFile("variables(최종).xlsx")
         df_vars_raw = pd.read_excel(xls_vars, sheet_name="Sheet1")
@@ -125,9 +91,9 @@ def load_and_match_data():
         st.stop()
         
     df_vars = pd.DataFrame()
-    df_vars['Province'] = df_vars_raw.iloc[:, 0].apply(clean_province_name)
+    df_vars['Raw_Province'] = df_vars_raw.iloc[:, 0].astype(str)
+    df_vars['Join_Key'] = df_vars['Raw_Province'].apply(make_pure_key)
     
-    # 2007, 2025 GDP 및 Poverty 차이 계산
     g2007 = pd.to_numeric(df_vars_raw.iloc[:, 1], errors='coerce')
     g2025 = pd.to_numeric(df_vars_raw.iloc[:, 2], errors='coerce')
     p2007 = pd.to_numeric(df_vars_raw.iloc[:, 3], errors='coerce')
@@ -136,17 +102,16 @@ def load_and_match_data():
     df_vars['GDP_diff'] = g2025 - g2007
     df_vars['Poverty_diff'] = p2025 - p2007
     
-    # 표준 매칭 키 생성
-    df_temp['Join_Key'] = df_temp['Province'].str.replace(r'\s+', '', regex=True).str.lower()
-    df_vars['Join_Key'] = df_vars['Province'].str.replace(r'\s+', '', regex=True).str.lower()
-    
-    # 데이터 병합 (알파벳 정렬 순서에 상관없이 Join_Key로 매칭)
+    # 3. 엑셀의 순서가 알파벳순이 아니거나 뒤섞여도 정상적으로 합칠 수 있도록 Join_Key 기준으로 완벽 병합(Merge)
     df_final = pd.merge(df_temp, df_vars[['Join_Key', 'GDP_diff', 'Poverty_diff']], on='Join_Key', how='inner')
     
-    # 결측치 및 노이즈 행 정리
-    df_final = df_final[df_final['Province'].notna() & (df_final['Province'] != '')]
-    df_final = df_final[~df_final['Province'].str.contains("total|average|합계|평균|province", case=False, na=False)]
+    # 노이즈 행 및 합계 데이터 완전 제거
+    df_final = df_final[df_final['Join_Key'] != ""]
+    df_final = df_final[~df_final['Join_Key'].str.contains("total|average|sum|mean|합계|평균", na=False)]
     df_final = df_final.dropna(subset=['Temp_Change', 'GDP_diff', 'Poverty_diff']).reset_index(drop=True)
+    
+    # 깨진 한글/영문 이름을 표준 영문 표기로 통일
+    df_final['Province'] = df_final['Join_Key'].map(DISPLAY_NAMES).fillna(df_final['Raw_Province'])
     
     # 정규화 연산 (0 ~ 1)
     gdp_min, gdp_max = df_final['GDP_diff'].min(), df_final['GDP_diff'].max()
@@ -159,7 +124,7 @@ def load_and_match_data():
 
 df_final = load_and_match_data()
 
-# GeoJSON 로드
+# GeoJSON 로드 및 가공
 geojson_path = "indonesia.geojson"
 if not os.path.exists(geojson_path) and os.path.exists("indonesia.geojson.json"):
     geojson_path = "indonesia.geojson.json"
@@ -171,18 +136,41 @@ except Exception as e:
     st.error(f"지도 데이터 파일 로드 실패: {e}")
     st.stop()
 
+# GeoJSON에서 주 이름이 담긴 속성 자동 탐색 (가장 정확한 NAME_1 혹은 name 등을 매칭)
+possible_keys = ['NAME_1', 'name', 'province', 'state', 'PROVINCE', 'NAME']
+found_key = None
+for feature in geo_data['features']:
+    props = feature['properties']
+    for pk in possible_keys:
+        if pk in props and props[pk]:
+            found_key = pk
+            break
+    if found_key:
+        break
+
+if not found_key and len(geo_data['features']) > 0:
+    found_key = list(geo_data['features'][0]['properties'].keys())[0]
+
+# GeoJSON의 각 구역에 비교 분석용 "Match_Key" 주입
+geojson_keys = []
+for feature in geo_data['features']:
+    orig_name = feature['properties'].get(found_key, '')
+    pure_k = make_pure_key(orig_name)
+    feature['properties']['Match_Key'] = pure_k
+    geojson_keys.append(pure_k)
+
+# 데이터프레임과 지도 파일의 정렬 순서를 일치시키기 위해 동일한 매치 키 컬럼 생성
+df_final['Match_Key'] = df_final['Join_Key']
+
 # 사이드바 가중치 조절 슬라이더
 st.sidebar.header("⚙️ 가중치 설정")
-alpha = st.sidebar.slider("1인당 GDP 가중치 (a)", 0.0, 1.0, 0.7, 0.1)
-gamma = st.sidebar.slider("빈곤율 제약 가중치 (c)", 0.0, 1.0, 0.3, 0.1)
+alpha = st.sidebar.slider("1인당 GDP 가중치 (a)", 0.0, 1.0, 0.4, 0.1)
+gamma = st.sidebar.slider("빈곤율 제약 가중치 (c)", 0.0, 1.0, 0.6, 0.1)
 
 # 실시간 시뮬레이션 계산
 df_final['BCPI'] = (alpha * df_final['GDP_norm']) - (gamma * df_final['Poverty_norm'])
 df_final['ETI'] = df_final['BCPI'] / (df_final['Temp_Change'].abs() + 1e-5)
 df_final['순위'] = df_final['ETI'].rank(ascending=False, method='min').astype(int)
-
-# 지도의 NAME_1과 맞출 매핑 필드 추가
-df_final['Geo_Province'] = df_final['Province'].astype(str).str.strip()
 
 # 화면 분할 출력
 col1, col2 = st.columns([4, 6])
@@ -209,8 +197,8 @@ with col2:
         geo_data=geo_data,
         name="환경탄력성지수(ETI)",
         data=df_final,
-        columns=["Geo_Province", "ETI"],
-        key_on="feature.properties.NAME_1",
+        columns=["Match_Key", "ETI"],
+        key_on="feature.properties.Match_Key",  # 꼬여있는 정렬 순서에 대응하는 유니크 매칭 키
         fill_color="YlOrRd",
         fill_opacity=0.7,
         line_opacity=0.4,
@@ -219,3 +207,36 @@ with col2:
     ).add_to(m)
     
     st_folium(m, width="100%", height=550)
+
+# 🔍 문제 원인 해결을 위한 하단 디버그 검사기 (어떤 주가 매칭이 안 되고 있나?)
+with st.expander("🔍 [문제 검사기] 엑셀 데이터 vs 지도 파일 매칭 현황 확인"):
+    excel_keys = set(df_final['Match_Key'].tolist())
+    map_keys = set(geojson_keys)
+    
+    matched = excel_keys.intersection(map_keys)
+    unmatched_excel = excel_keys - map_keys
+    unmatched_map = map_keys - excel_keys
+    
+    st.write(f"✅ **정상 매칭 성공한 주 개수:** {len(matched)}개")
+    
+    col_db1, col_db2 = st.columns(2)
+    with col_db1:
+        st.write("❌ **엑셀에는 있지만 지도파일에 없는 스펠링:**")
+        if unmatched_excel:
+            for k in unmatched_excel:
+                original_row = df_final[df_final['Match_Key'] == k]['Raw_Province'].values[0]
+                st.write(f"- `{original_row}` (인식키: `{k}`)")
+        else:
+            st.write("없음! 모두 완벽 매칭되었습니다.")
+            
+    with col_db2:
+        st.write("❌ **지도파일에는 있지만 엑셀에 매칭 안 된 스펠링:**")
+        if unmatched_map:
+            for k in unmatched_map:
+                # GeoJSON 원래 이름 찾기
+                for feature in geo_data['features']:
+                    if feature['properties']['Match_Key'] == k:
+                        st.write(f"- `{feature['properties'].get(found_key)}` (인식키: `{k}`)")
+                        break
+        else:
+            st.write("없음! 모든 지도 영역이 정상 매칭되었습니다.")
