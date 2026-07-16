@@ -11,7 +11,7 @@ st.set_page_config(layout="wide")
 st.title("🇮🇩 인도네시아 주별 환경탄력성 지수 시뮬레이터")
 st.markdown("가중치를 조절하면 우측 지도의 주별 색상과 좌측 랭킹이 실시간으로 시각화됩니다.")
 
-# 주 이름을 청소하는 함수
+# 양 끝 공백 및 줄바꿈을 지워주는 기본 클리닝 함수
 def clean_province_name(name):
     if pd.isna(name):
         return ""
@@ -21,7 +21,7 @@ def clean_province_name(name):
 
 @st.cache_data
 def load_and_match_data():
-    # 1. 기온 데이터 로드 (★ data(찐최종).xlsx 로 파일명 수정완료!)
+    # 1. 기온 데이터 로드
     try:
         xls_temp = pd.ExcelFile("data(찐최종).xlsx")
         df_temp_raw = pd.read_excel(xls_temp, sheet_name="Sheet1")
@@ -33,7 +33,7 @@ def load_and_match_data():
     df_temp['Province'] = df_temp_raw.iloc[:, 0].apply(clean_province_name)
     df_temp['Temp_Change'] = pd.to_numeric(df_temp_raw.iloc[:, 1], errors='coerce')
     
-    # 2. 변수 데이터 로드 (variables(최종).xlsx)
+    # 2. 변수 데이터 로드
     try:
         xls_vars = pd.ExcelFile("variables(최종).xlsx")
         df_vars_raw = pd.read_excel(xls_vars, sheet_name="Sheet1")
@@ -60,9 +60,9 @@ def load_and_match_data():
     # 데이터 병합
     df_final = pd.merge(df_temp, df_vars[['Join_Key', 'GDP_diff', 'Poverty_diff']], on='Join_Key', how='inner')
     
-    # 노이즈 행 및 결측값 완벽 제거
+    # 불필요한 행 제거
     df_final = df_final[df_final['Province'].notna() & (df_final['Province'] != '')]
-    df_final = df_final[~df_final['Province'].str.contains("total|average|합계|평균|province", case=False, na=False)]
+    df_final = df_final[~df_final['Province'].str.contains("total|average|합계|평균", case=False, na=False)]
     df_final = df_final.dropna(subset=['Temp_Change', 'GDP_diff', 'Poverty_diff']).reset_index(drop=True)
     
     # 정규화 연산 (0 ~ 1)
@@ -90,14 +90,15 @@ except Exception as e:
 
 # 사이드바 가중치 조절 슬라이더
 st.sidebar.header("⚙️ 가중치 설정")
-alpha = st.sidebar.slider("1인당 GDP 가중치 (a)", 0.0, 1.0, 0.7, 0.1)
-gamma = st.sidebar.slider("빈곤율 제약 가중치 (c)", 0.0, 1.0, 0.3, 0.1)
+alpha = st.sidebar.slider("1인당 GDP 가중치 (a)", 0.0, 1.0, 0.3, 0.1)
+gamma = st.sidebar.slider("빈곤율 제약 가중치 (c)", 0.0, 1.0, 0.7, 0.1)
 
 # 실시간 시뮬레이션 계산
 df_final['BCPI'] = (alpha * df_final['GDP_norm']) - (gamma * df_final['Poverty_norm'])
 df_final['ETI'] = df_final['BCPI'] / (df_final['Temp_Change'].abs() + 1e-5)
 df_final['순위'] = df_final['ETI'].rank(ascending=False, method='min').astype(int)
 
+# 지도의 NAME_1과 정확하게 1:1 결합하기 위한 칼럼 매핑
 df_final['Geo_Province'] = df_final['Province'].astype(str).str.strip()
 
 # 화면 분할 출력
