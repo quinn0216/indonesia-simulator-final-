@@ -4,63 +4,51 @@ import numpy as np
 import folium
 import json
 import os
-import re
 from streamlit_folium import st_folium
 
 st.set_page_config(layout="wide")
 st.title("🇮🇩 인도네시아 주별 환경탄력성 지수 시뮬레이터")
 st.markdown("가중치를 조절하면 우측 지도의 주별 색상과 좌측 랭킹이 실시간으로 시각화됩니다.")
 
-# 양 끝 공백 및 줄바꿈 정리 함수
-def clean_province_name(name):
-    if pd.isna(name):
-        return ""
-    name_str = str(name).replace('\n', ' ').strip()
-    name_str = re.sub(r'\s+', ' ', name_str)
-    return name_str
-
 def load_and_match_data():
     # 1. 기온 데이터 로드
     try:
         xls_temp = pd.ExcelFile("data(찐최종).xlsx")
-        df_temp_raw = pd.read_excel(xls_temp, sheet_name="Sheet1")
+        df_temp = pd.read_excel(xls_temp, sheet_name="Sheet1")
     except Exception as e:
         st.error(f"data(찐최종).xlsx 로드 실패: {e}")
         st.stop()
     
-    df_temp = pd.DataFrame()
-    df_temp['Province'] = df_temp_raw.iloc[:, 0].apply(clean_province_name)
-    df_temp['Temp_Change'] = pd.to_numeric(df_temp_raw.iloc[:, 1], errors='coerce')
+    # 컬럼명 명확화 및 양끝 공백 제거만 진행 (소문자화/공백삭제 금지)
+    df_temp.iloc[:, 0] = df_temp.iloc[:, 0].astype(str).str.strip()
+    df_temp = df_temp.rename(columns={df_temp.columns[0]: 'Province', df_temp.columns[1]: 'Temp_Change'})
+    df_temp['Temp_Change'] = pd.to_numeric(df_temp['Temp_Change'], errors='coerce')
     
     # 2. 변수 데이터 로드
     try:
         xls_vars = pd.ExcelFile("variables(최종).xlsx")
-        df_vars_raw = pd.read_excel(xls_vars, sheet_name="Sheet1")
+        df_vars = pd.read_excel(xls_vars, sheet_name="Sheet1")
     except Exception as e:
         st.error(f"variables(최종).xlsx 로드 실패: {e}")
         st.stop()
         
-    df_vars = pd.DataFrame()
-    df_vars['Province'] = df_vars_raw.iloc[:, 0].apply(clean_province_name)
+    df_vars.iloc[:, 0] = df_vars.iloc[:, 0].astype(str).str.strip()
     
-    # GDP 및 Poverty 차이 계산
-    g2007 = pd.to_numeric(df_vars_raw.iloc[:, 1], errors='coerce')
-    g2025 = pd.to_numeric(df_vars_raw.iloc[:, 2], errors='coerce')
-    p2007 = pd.to_numeric(df_vars_raw.iloc[:, 3], errors='coerce')
-    p2025 = pd.to_numeric(df_vars_raw.iloc[:, 4], errors='coerce')
+    g2007 = pd.to_numeric(df_vars.iloc[:, 1], errors='coerce')
+    g2025 = pd.to_numeric(df_vars.iloc[:, 2], errors='coerce')
+    p2007 = pd.to_numeric(df_vars.iloc[:, 3], errors='coerce')
+    p2025 = pd.to_numeric(df_vars.iloc[:, 4], errors='coerce')
     
-    df_vars['GDP_diff'] = g2025 - g2007
-    df_vars['Poverty_diff'] = p2025 - p2007
+    df_vars_clean = pd.DataFrame({
+        'Province': df_vars.iloc[:, 0],
+        'GDP_diff': g2025 - g2007,
+        'Poverty_diff': p2025 - p2007
+    })
     
-    # 매칭용 조인 키 (공백 제거, 소문자화)
-    df_temp['Join_Key'] = df_temp['Province'].str.replace(r'\s+', '', regex=True).str.lower()
-    df_vars['Join_Key'] = df_vars['Province'].str.replace(r'\s+', '', regex=True).str.lower()
+    # 3. 엑셀 그대로 1:1 병합 (Province 이름 기준)
+    df_final = pd.merge(df_temp, df_vars_clean, on='Province', how='inner')
     
-    # 데이터 병합 (data(찐최종).xlsx의 Province 명칭을 기준)
-    df_final = pd.merge(df_temp, df_vars[['Join_Key', 'GDP_diff', 'Poverty_diff']], on='Join_Key', how='inner')
-    
-    # 불필요한 행 정제
-    df_final = df_final[df_final['Province'].notna() & (df_final['Province'] != '')]
+    # 합계/평균 행 제거
     df_final = df_final[~df_final['Province'].str.contains("total|average|합계|평균", case=False, na=False)]
     df_final = df_final.dropna(subset=['Temp_Change', 'GDP_diff', 'Poverty_diff']).reset_index(drop=True)
     
@@ -73,7 +61,6 @@ def load_and_match_data():
     
     return df_final
 
-# 데이터 로드 실행 (캐시 미사용으로 파일 수정 즉시 반영)
 df_final = load_and_match_data()
 
 # GeoJSON 로드
@@ -103,7 +90,7 @@ with col1:
     st.subheader("📊 시뮬레이션 결과 랭킹")
     res_df = pd.DataFrame({
         '순위': df_final['순위'],
-        '주(Province)': df_final['Province'],  # 엑셀 명칭 그대로 출력
+        '주(Province)': df_final['Province'],
         'BCPI': df_final['BCPI'].round(4),
         '기온 변화량': df_final['Temp_Change'].round(4),
         '환경탄력성(ETI)': df_final['ETI'].round(4)
@@ -117,7 +104,6 @@ with col2:
     
     threshold_scale = np.linspace(df_final['ETI'].min(), df_final['ETI'].max(), 5).tolist()
 
-    # GeoJSON의 NAME_1과 엑셀의 Province를 1:1 매칭
     folium.Choropleth(
         geo_data=geo_data,
         name="환경탄력성지수(ETI)",
