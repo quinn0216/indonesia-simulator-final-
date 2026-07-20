@@ -106,7 +106,7 @@ name_mapping = {
     'Aceh': 'Nanggroe Aceh Darussalam'
 }
 
-# 지도 결합용 컬럼 변환
+# 지도 및 표 공통 표시용 컬럼 변환
 df_final['Geo_Province'] = df_final['Province'].astype(str).str.strip().replace(name_mapping)
 
 # 화면 분할 출력
@@ -116,7 +116,7 @@ with col1:
     st.subheader("📊 시뮬레이션 결과 랭킹")
     res_df = pd.DataFrame({
         '순위': df_final['순위'],
-        '주(Province)': df_final['Province'],
+        '주(Province)': df_final['Geo_Province'], # 💡 [수정 완료] Province -> Geo_Province로 교체!
         'BCPI': df_final['BCPI'].round(4),
         '기온 변화량': df_final['Temp_Change'].round(4),
         '환경탄력성(ETI)': df_final['ETI'].round(4)
