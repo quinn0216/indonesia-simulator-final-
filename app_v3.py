@@ -11,7 +11,7 @@ st.set_page_config(layout="wide")
 st.title("🇮🇩 인도네시아 주별 환경탄력성 지수 시뮬레이터")
 st.markdown("가중치를 조절하면 우측 지도의 주별 색상과 좌측 랭킹이 실시간으로 시각화됩니다.")
 
-# 양 끝 공백 및 줄바꿈을 지워주는 기본 클리닝 함수
+# 양 끝 공백 및 줄바꿈 정리 함수
 def clean_province_name(name):
     if pd.isna(name):
         return ""
@@ -19,7 +19,6 @@ def clean_province_name(name):
     name_str = re.sub(r'\s+', ' ', name_str)
     return name_str
 
-@st.cache_data
 def load_and_match_data():
     # 1. 기온 데이터 로드
     try:
@@ -57,10 +56,10 @@ def load_and_match_data():
     df_temp['Join_Key'] = df_temp['Province'].str.replace(r'\s+', '', regex=True).str.lower()
     df_vars['Join_Key'] = df_vars['Province'].str.replace(r'\s+', '', regex=True).str.lower()
     
-    # 데이터 병합
+    # 데이터 병합 (data(찐최종).xlsx의 Province 명칭을 기준)
     df_final = pd.merge(df_temp, df_vars[['Join_Key', 'GDP_diff', 'Poverty_diff']], on='Join_Key', how='inner')
     
-    # 불필요한 행 제거
+    # 불필요한 행 정제
     df_final = df_final[df_final['Province'].notna() & (df_final['Province'] != '')]
     df_final = df_final[~df_final['Province'].str.contains("total|average|합계|평균", case=False, na=False)]
     df_final = df_final.dropna(subset=['Temp_Change', 'GDP_diff', 'Poverty_diff']).reset_index(drop=True)
@@ -74,6 +73,7 @@ def load_and_match_data():
     
     return df_final
 
+# 데이터 로드 실행 (캐시 미사용으로 파일 수정 즉시 반영)
 df_final = load_and_match_data()
 
 # GeoJSON 로드
@@ -96,19 +96,6 @@ df_final['BCPI'] = (alpha * df_final['GDP_norm']) - (gamma * df_final['Poverty_n
 df_final['ETI'] = df_final['BCPI'] / (df_final['Temp_Change'].abs() + 1e-5)
 df_final['순위'] = df_final['ETI'].rank(ascending=False, method='min').astype(int)
 
-# 2007년 기준 GADM 2.8 지도의 NAME_1 명칭과 엑셀 명칭을 1:1 강제 보정하는 사전
-name_mapping = {
-    'Papua Barat': 'Irian Jaya Barat',              # 2007년 지도의 서파푸아 표기
-    'Kepulauan Bangka Belitung': 'Bangka-Belitung', # 2007년 지도의 방카벨리퉁 표기
-    'Bangka Belitung': 'Bangka-Belitung',
-    'Jakarta Raya': 'Jakarta',                      # 자카르타 표기 통일
-    'Yogyakarta': 'Daerah Istimewa Yogyakarta',
-    'Aceh': 'Nanggroe Aceh Darussalam'
-}
-
-# 지도 및 표 공통 표시용 컬럼 변환
-df_final['Geo_Province'] = df_final['Province'].astype(str).str.strip().replace(name_mapping)
-
 # 화면 분할 출력
 col1, col2 = st.columns([4, 6])
 
@@ -116,7 +103,7 @@ with col1:
     st.subheader("📊 시뮬레이션 결과 랭킹")
     res_df = pd.DataFrame({
         '순위': df_final['순위'],
-        '주(Province)': df_final['Geo_Province'], # 💡 [수정 완료] Province -> Geo_Province로 교체!
+        '주(Province)': df_final['Province'],  # 엑셀 명칭 그대로 출력
         'BCPI': df_final['BCPI'].round(4),
         '기온 변화량': df_final['Temp_Change'].round(4),
         '환경탄력성(ETI)': df_final['ETI'].round(4)
@@ -130,11 +117,12 @@ with col2:
     
     threshold_scale = np.linspace(df_final['ETI'].min(), df_final['ETI'].max(), 5).tolist()
 
+    # GeoJSON의 NAME_1과 엑셀의 Province를 1:1 매칭
     folium.Choropleth(
         geo_data=geo_data,
         name="환경탄력성지수(ETI)",
         data=df_final,
-        columns=["Geo_Province", "ETI"],
+        columns=["Province", "ETI"],
         key_on="feature.properties.NAME_1",
         fill_color="YlOrRd",
         fill_opacity=0.7,
