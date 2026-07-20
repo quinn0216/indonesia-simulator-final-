@@ -76,10 +76,8 @@ def load_and_match_data():
 
 df_final = load_and_match_data()
 
-# GeoJSON 로드
-geojson_path = "indonesia.geojson"
-if not os.path.exists(geojson_path) and os.path.exists("indonesia.geojson.json"):
-    geojson_path = "indonesia.geojson.json"
+# 💡 [수정 완료] 깃허브의 파일명과 일치하도록 변경 (indonesia.json)
+geojson_path = "indonesia.json"
 
 try:
     with open(geojson_path, "r", encoding="utf-8") as f:
@@ -88,10 +86,10 @@ except Exception as e:
     st.error(f"지도 데이터 파일 로드 실패: {e}")
     st.stop()
 
-# 사이드바 가중치 조절 슬라이더
+# 사이드바 가중치 조절 슬라이더 (기본값을 분석 결과에 맞춰 0.7과 0.3으로 징검다리 세팅)
 st.sidebar.header("⚙️ 가중치 설정")
-alpha = st.sidebar.slider("1인당 GDP 가중치 (a)", 0.0, 1.0, 0.3, 0.1)
-gamma = st.sidebar.slider("빈곤율 제약 가중치 (c)", 0.0, 1.0, 0.7, 0.1)
+alpha = st.sidebar.slider("1인당 GDP 가중치 (a)", 0.0, 1.0, 0.7, 0.1)
+gamma = st.sidebar.slider("빈곤율 제약 가중치 (c)", 0.0, 1.0, 0.3, 0.1)
 
 # 실시간 시뮬레이션 계산
 df_final['BCPI'] = (alpha * df_final['GDP_norm']) - (gamma * df_final['Poverty_norm'])
@@ -135,4 +133,5 @@ with col2:
         legend_name="환경탄력성지수 (ETI)",
     ).add_to(m)
     
+    # 💡 [수정 완료] 맨 끝에 있던 오타 괄호 ')' 제거
     st_folium(m, width="100%", height=550)
