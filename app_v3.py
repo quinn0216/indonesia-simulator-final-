@@ -76,7 +76,7 @@ def load_and_match_data():
 
 df_final = load_and_match_data()
 
-# 💡 [수정 완료] 깃허브의 파일명과 일치하도록 변경 (indonesia.json)
+# GeoJSON 로드
 geojson_path = "indonesia.json"
 
 try:
@@ -86,7 +86,7 @@ except Exception as e:
     st.error(f"지도 데이터 파일 로드 실패: {e}")
     st.stop()
 
-# 사이드바 가중치 조절 슬라이더 (기본값을 분석 결과에 맞춰 0.7과 0.3으로 징검다리 세팅)
+# 사이드바 가중치 조절 슬라이더
 st.sidebar.header("⚙️ 가중치 설정")
 alpha = st.sidebar.slider("1인당 GDP 가중치 (a)", 0.0, 1.0, 0.7, 0.1)
 gamma = st.sidebar.slider("빈곤율 제약 가중치 (c)", 0.0, 1.0, 0.3, 0.1)
@@ -96,8 +96,18 @@ df_final['BCPI'] = (alpha * df_final['GDP_norm']) - (gamma * df_final['Poverty_n
 df_final['ETI'] = df_final['BCPI'] / (df_final['Temp_Change'].abs() + 1e-5)
 df_final['순위'] = df_final['ETI'].rank(ascending=False, method='min').astype(int)
 
-# 지도의 NAME_1과 정확하게 1:1 결합하기 위한 칼럼 매핑
-df_final['Geo_Province'] = df_final['Province'].astype(str).str.strip()
+# 2007년 기준 GADM 2.8 지도의 NAME_1 명칭과 엑셀 명칭을 1:1 강제 보정하는 사전
+name_mapping = {
+    'Papua Barat': 'Irian Jaya Barat',              # 2007년 지도의 서파푸아 표기
+    'Kepulauan Bangka Belitung': 'Bangka-Belitung', # 2007년 지도의 방카벨리퉁 표기
+    'Bangka Belitung': 'Bangka-Belitung',
+    'Jakarta Raya': 'Jakarta',                      # 자카르타 표기 통일
+    'Yogyakarta': 'Daerah Istimewa Yogyakarta',
+    'Aceh': 'Nanggroe Aceh Darussalam'
+}
+
+# 지도 결합용 컬럼 변환
+df_final['Geo_Province'] = df_final['Province'].astype(str).str.strip().replace(name_mapping)
 
 # 화면 분할 출력
 col1, col2 = st.columns([4, 6])
@@ -133,5 +143,4 @@ with col2:
         legend_name="환경탄력성지수 (ETI)",
     ).add_to(m)
     
-    # 💡 [수정 완료] 맨 끝에 있던 오타 괄호 ')' 제거
     st_folium(m, width="100%", height=550)
